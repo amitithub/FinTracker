@@ -1,0 +1,6 @@
+{
+  "name": "LedgerFlow",
+  "description": "Open-source cross-device expense tracker with real-time Firebase cloud sync, multi-currency conversion, monthly budget alerts, recurring bills, and interactive expense reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

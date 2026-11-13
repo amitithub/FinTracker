@@ -1,0 +1,269 @@
+{
+  "entities": {
+    "UserPreferences": {
+      "title": "UserPreferences",
+      "description": "User reporting preferences including primary currency, overall monthly budget limit, and theme posture.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "baseCurrency": {
+          "type": "string",
+          "enum": ["USD", "EUR", "GBP", "INR", "JPY", "CAD", "AUD", "SGD", "CHF"]
+        },
+        "monthlyBudgetLimit": {
+          "type": "number"
+        },
+        "themePreference": {
+          "type": "string",
+          "enum": ["light", "dark", "system"]
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "baseCurrency", "monthlyBudgetLimit", "themePreference", "updatedAt"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Individual expense transaction with original currency, exchange rate, and converted base-currency amount.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "amount": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["USD", "EUR", "GBP", "INR", "JPY", "CAD", "AUD", "SGD", "CHF"]
+        },
+        "exchangeRate": {
+          "type": "number"
+        },
+        "convertedAmount": {
+          "type": "number"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "Housing",
+            "Food & Dining",
+            "Transport",
+            "Utilities",
+            "Healthcare",
+            "Shopping",
+            "Entertainment",
+            "Travel",
+            "Software & Subscriptions",
+            "Other"
+          ]
+        },
+        "date": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "monthKey": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 7,
+          "pattern": "^\\d{4}-\\d{2}$"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "recurringId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]*$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "title",
+        "amount",
+        "currency",
+        "exchangeRate",
+        "convertedAmount",
+        "category",
+        "date",
+        "monthKey",
+        "notes",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CategoryBudget": {
+      "title": "CategoryBudget",
+      "description": "Monthly spending cap and alert threshold percentage for a specific expense category.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "Housing",
+            "Food & Dining",
+            "Transport",
+            "Utilities",
+            "Healthcare",
+            "Shopping",
+            "Entertainment",
+            "Travel",
+            "Software & Subscriptions",
+            "Other"
+          ]
+        },
+        "monthlyLimit": {
+          "type": "number"
+        },
+        "alertThresholdPercent": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "category", "monthlyLimit", "alertThresholdPercent", "createdAt", "updatedAt"]
+    },
+    "RecurringBill": {
+      "title": "RecurringBill",
+      "description": "Recurring expense schedule supporting weekly, monthly, and yearly billing reminders.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "amount": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["USD", "EUR", "GBP", "INR", "JPY", "CAD", "AUD", "SGD", "CHF"]
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "Housing",
+            "Food & Dining",
+            "Transport",
+            "Utilities",
+            "Healthcare",
+            "Shopping",
+            "Entertainment",
+            "Travel",
+            "Software & Subscriptions",
+            "Other"
+          ]
+        },
+        "cadence": {
+          "type": "string",
+          "enum": ["weekly", "monthly", "yearly"]
+        },
+        "nextDueDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "autoRemind": {
+          "type": "boolean"
+        },
+        "lastPaidDate": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "title",
+        "amount",
+        "currency",
+        "category",
+        "cadence",
+        "nextDueDate",
+        "autoRemind",
+        "lastPaidDate",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/profile/preferences": {
+      "schema": {
+        "$ref": "#/entities/UserPreferences"
+      },
+      "description": "Per-user reporting preferences and overall monthly budget limit."
+    },
+    "/users/{userId}/expenses/{expenseId}": {
+      "schema": {
+        "$ref": "#/entities/Expense"
+      },
+      "description": "User-owned historical and current expense entries."
+    },
+    "/users/{userId}/budgets/{budgetId}": {
+      "schema": {
+        "$ref": "#/entities/CategoryBudget"
+      },
+      "description": "User-owned monthly category budget limits and threshold alerts."
+    },
+    "/users/{userId}/recurring/{billId}": {
+      "schema": {
+        "$ref": "#/entities/RecurringBill"
+      },
+      "description": "User-owned recurring bill schedules."
+    }
+  }
+}
