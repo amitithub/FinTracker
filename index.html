@@ -39,6 +39,27 @@
   </head>
   <body class="bg-slate-50 text-slate-900 dark:bg-[#090E1A] dark:text-slate-100 antialiased selection:bg-blue-600/20 selection:text-blue-700 dark:selection:text-blue-300">
     <div id="root"></div>
+    <noscript>
+      <div style="max-width:480px;margin:48px auto;padding:20px;font-family:system-ui,sans-serif;border:1px solid #cbd5e1;border-radius:12px;">
+        <strong>JavaScript is required to run FinTrack.</strong>
+        <p style="margin-top:8px;font-size:14px;color:#475569;">Please enable JavaScript in your browser and reload this page.</p>
+      </div>
+    </noscript>
+    <script>
+      setTimeout(function () {
+        if (!window.__FINTRACK_MOUNTED__) {
+          var root = document.getElementById('root');
+          if (root && !root.hasChildNodes()) {
+            root.innerHTML =
+              '<div style="max-width:520px;margin:56px auto;padding:24px;font-family:system-ui,sans-serif;border:1px solid #cbd5e1;border-radius:16px;background:#ffffff;color:#0f172a;">' +
+              '<h1 style="margin:0 0 8px;font-size:18px;font-weight:700;">FinTrack failed to start</h1>' +
+              '<p style="margin:0 0 12px;font-size:14px;line-height:1.5;color:#475569;">The application bundle did not finish loading. If you are viewing this on GitHub Pages, make sure <strong>Settings → Pages → Source</strong> is set to <strong>GitHub Actions</strong> (not Deploy from a branch).</p>' +
+              '<button onclick="window.location.reload()" style="padding:10px 16px;border-radius:10px;border:0;background:#2563eb;color:#ffffff;font-size:14px;font-weight:600;cursor:pointer;">Reload Page</button>' +
+              '</div>';
+          }
+        }
+      }, 4500);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

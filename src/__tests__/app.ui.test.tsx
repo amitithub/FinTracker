@@ -1,7 +1,11 @@
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../App';
+
+beforeEach(() => {
+  vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline test mode'));
+});
 
 // Mock Firebase SDK modules so UI & workflow integration tests run offline hermetically
 vi.mock('../lib/firebase', () => ({
@@ -204,5 +208,24 @@ describe('FinTrack interactive flows, theme switching, CRUD operations, charts &
     await waitFor(() => {
       expect(screen.queryByText('Updated Fiber Bill')).not.toBeInTheDocument();
     });
+  }, 15000);
+
+  it('renders ErrorBoundary recovery screen instead of a blank page when a child throws', async () => {
+    const { ErrorBoundary } = await import('../components/ErrorBoundary');
+    const consoleErrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const BrokenChild = () => {
+      throw new Error('Simulated unexpected render failure');
+    };
+
+    render(
+      <ErrorBoundary>
+        <BrokenChild />
+      </ErrorBoundary>,
+    );
+
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    expect(screen.getByText('Simulated unexpected render failure')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Reload FinTrack/i })).toBeInTheDocument();
+    consoleErrSpy.mockRestore();
   });
 });

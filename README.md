@@ -123,6 +123,8 @@ git push -u origin main
 ```
 Then set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**.
 
+> **Troubleshooting a Blank Page on GitHub Pages:** If your GitHub Pages URL shows a blank page, open **Settings → Pages → Build and deployment → Source** and verify it is set to **GitHub Actions** (and **not** `Deploy from a branch`). Serving the raw repository root instead of the Vite `./dist` build artifact causes `/src/main.tsx` to 404.
+
 ---
 
 ## Local Development, Testing & Security Checks

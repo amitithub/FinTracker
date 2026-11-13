@@ -16,6 +16,7 @@ import { auth, googleProvider } from '../lib/firebase';
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
+  authError: string | null;
   isDemoMode: boolean;
   enterDemoMode: () => void;
   exitDemoMode: () => void;
@@ -63,17 +64,50 @@ export function formatFirebaseAuthError(error: unknown): string {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
-      if (firebaseUser) {
-        setIsDemoMode(false);
+    let settled = false;
+    const fallbackTimer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        setLoading(false);
       }
+    }, 4000);
+
+    let unsub: (() => void) | undefined;
+    try {
+      unsub = onAuthStateChanged(
+        auth,
+        (firebaseUser) => {
+          settled = true;
+          clearTimeout(fallbackTimer);
+          setUser(firebaseUser);
+          setAuthError(null);
+          if (firebaseUser) {
+            setIsDemoMode(false);
+          }
+          setLoading(false);
+        },
+        (error) => {
+          settled = true;
+          clearTimeout(fallbackTimer);
+          setAuthError(formatFirebaseAuthError(error));
+          setLoading(false);
+        },
+      );
+    } catch (err) {
+      settled = true;
+      clearTimeout(fallbackTimer);
+      setAuthError(formatFirebaseAuthError(err));
       setLoading(false);
-    });
-    return () => unsub();
+    }
+
+    return () => {
+      clearTimeout(fallbackTimer);
+      if (unsub) unsub();
+    };
   }, []);
 
   const enterDemoMode = () => setIsDemoMode(true);
@@ -148,6 +182,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         loading,
+        authError,
         isDemoMode,
         enterDemoMode,
         exitDemoMode,

@@ -23,6 +23,7 @@ type AuthMode = 'signin' | 'signup' | 'reset';
 export function AuthScreen() {
   const {
     user,
+    authError,
     isDemoMode,
     enterDemoMode,
     signInWithGoogle,
@@ -43,6 +44,8 @@ export function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
+
+  const visibleError = errorMsg || authError;
 
   // Verification gate for newly created Email/Password accounts
   if (user && !user.emailVerified && !isDemoMode) {
@@ -383,12 +386,12 @@ export function AuthScreen() {
                 </div>
               )}
 
-              {errorMsg && (
+              {visibleError && (
                 <div
                   role="alert"
                   className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs text-rose-700 dark:text-rose-300 leading-relaxed"
                 >
-                  {errorMsg}
+                  {visibleError}
                 </div>
               )}
 

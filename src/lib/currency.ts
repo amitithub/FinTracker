@@ -126,7 +126,7 @@ export async function fetchLiveRates(baseCurrency: CurrencyCode): Promise<Exchan
     const timer = setTimeout(() => controller.abort(), 4500);
     const targets = CURRENCIES.filter((c) => c !== baseCurrency).join(',');
     const res = await fetch(
-      `https://api.frankfurter.app/latest?from=${encodeURIComponent(baseCurrency)}&to=${encodeURIComponent(targets)}`,
+      `https://api.frankfurter.dev/v1/latest?base=${encodeURIComponent(baseCurrency)}&symbols=${encodeURIComponent(targets)}`,
       { signal: controller.signal },
     );
     clearTimeout(timer);
