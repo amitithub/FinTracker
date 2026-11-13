@@ -101,6 +101,10 @@ Before using cloud sync on your live GitHub Pages URL, complete these two free s
    - Open **Authentication → Sign-in method → Add new provider → Email/Password** and toggle **Enable**.
 2. **Allowlist Your GitHub Pages Domain**:
    - Open **Authentication → Settings → Authorized domains → Add domain** and add `<your-github-username>.github.io` (or your custom domain).
+3. **Restrict Your Firebase Web API Key (Resolves GitHub Secret Scanning Alerts)**:
+   - A Firebase Web SDK `apiKey` is a public client identifier (security is enforced by `firestore.rules` and Firebase Auth), which still triggers GitHub's generic Google API Key scanner if committed in `firebase-applet-config.json`.
+   - In **Google Cloud Console → APIs & Services → Credentials**, edit the Browser API key and add **Website (HTTP referrer) restrictions** (`https://<your-github-username>.github.io/*` and `http://localhost:*`) plus **API restrictions** (Identity Toolkit, Token Service, Cloud Firestore).
+   - You can then safely dismiss the Secret Scanning alert in GitHub **Security → Secret scanning**, or set `VITE_FIREBASE_*` GitHub Actions Secrets and add `firebase-applet-config.json` to `.gitignore`.
 
 ---
 
