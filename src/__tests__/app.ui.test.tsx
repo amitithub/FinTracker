@@ -13,6 +13,8 @@ vi.mock('../lib/firebase', () => ({
   db: {},
   auth: { currentUser: null },
   googleProvider: {},
+  isFirebaseConfigured: true,
+  firebaseInitError: null,
   testFirestoreConnection: vi.fn(),
 }));
 

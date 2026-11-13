@@ -11,12 +11,18 @@ import {
   User,
 } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
-import { auth, googleProvider } from '../lib/firebase';
+import {
+  auth,
+  firebaseInitError,
+  googleProvider,
+  isFirebaseConfigured,
+} from '../lib/firebase';
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
   authError: string | null;
+  isCloudConfigured: boolean;
   isDemoMode: boolean;
   enterDemoMode: () => void;
   exitDemoMode: () => void;
@@ -63,11 +69,16 @@ export function formatFirebaseAuthError(error: unknown): string {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(() => Boolean(auth && isFirebaseConfigured));
+  const [authError, setAuthError] = useState<string | null>(() => firebaseInitError ?? null);
   const [isDemoMode, setIsDemoMode] = useState(false);
 
   useEffect(() => {
+    if (!auth || !isFirebaseConfigured) {
+      setLoading(false);
+      return;
+    }
+
     let settled = false;
     const fallbackTimer = setTimeout(() => {
       if (!settled) {
@@ -113,9 +124,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const enterDemoMode = () => setIsDemoMode(true);
   const exitDemoMode = () => setIsDemoMode(false);
 
+  const requireAuth = () => {
+    if (!auth) {
+      throw new Error(
+        firebaseInitError ||
+          'Cloud sync is not configured yet. Add VITE_FIREBASE_* GitHub Secrets or use Sample Preview Mode.',
+      );
+    }
+    return auth;
+  };
+
   const signInWithGoogle = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      const activeAuth = requireAuth();
+      if (!googleProvider) {
+        throw new Error('Google Sign-In provider is not configured.');
+      }
+      await signInWithPopup(activeAuth, googleProvider);
       setIsDemoMode(false);
     } catch (err) {
       throw new Error(formatFirebaseAuthError(err));
@@ -124,7 +149,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithEmail = async (email: string, password: string) => {
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      const activeAuth = requireAuth();
+      await signInWithEmailAndPassword(activeAuth, email.trim(), password);
       setIsDemoMode(false);
     } catch (err) {
       throw new Error(formatFirebaseAuthError(err));
@@ -133,7 +159,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUpWithEmail = async (email: string, password: string, displayName: string) => {
     try {
-      const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const activeAuth = requireAuth();
+      const cred = await createUserWithEmailAndPassword(activeAuth, email.trim(), password);
       if (displayName.trim()) {
         await updateProfile(cred.user, { displayName: displayName.trim().slice(0, 60) });
       }
@@ -146,16 +173,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resendVerificationEmail = async () => {
-    if (!auth.currentUser) throw new Error('No signed-in user.');
+    const activeAuth = requireAuth();
+    if (!activeAuth.currentUser) throw new Error('No signed-in user.');
     try {
-      await sendEmailVerification(auth.currentUser);
+      await sendEmailVerification(activeAuth.currentUser);
     } catch (err) {
       throw new Error(formatFirebaseAuthError(err));
     }
   };
 
   const refreshVerificationStatus = async (): Promise<boolean> => {
-    if (!auth.currentUser) return false;
+    if (!auth?.currentUser) return false;
     await auth.currentUser.reload();
     const updated = auth.currentUser;
     setUser(updated ? ({ ...updated } as User) : null);
@@ -164,7 +192,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const sendPasswordReset = async (email: string) => {
     try {
-      await sendPasswordResetEmail(auth, email.trim());
+      const activeAuth = requireAuth();
+      await sendPasswordResetEmail(activeAuth, email.trim());
     } catch (err) {
       throw new Error(formatFirebaseAuthError(err));
     }
@@ -172,7 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     setIsDemoMode(false);
-    if (auth.currentUser) {
+    if (auth?.currentUser) {
       await firebaseSignOut(auth);
     }
   };
@@ -183,6 +212,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         loading,
         authError,
+        isCloudConfigured: isFirebaseConfigured,
         isDemoMode,
         enterDemoMode,
         exitDemoMode,

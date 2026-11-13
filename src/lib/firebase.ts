@@ -1,6 +1,6 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
+import { FirebaseApp, initializeApp } from 'firebase/app';
+import { Auth, getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { doc, Firestore, getDocFromServer, getFirestore } from 'firebase/firestore';
 
 interface FirebaseAppletConfig {
   projectId: string;
@@ -30,16 +30,45 @@ const firebaseConfig: FirebaseAppletConfig = {
     env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || fileConfig?.firestoreDatabaseId || '(default)',
 };
 
-export const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({ prompt: 'select_account' });
+export const isFirebaseConfigured = Boolean(
+  firebaseConfig.apiKey &&
+    firebaseConfig.projectId &&
+    firebaseConfig.authDomain &&
+    firebaseConfig.appId,
+);
+
+let app: FirebaseApp | null = null;
+let db: Firestore | null = null;
+let auth: Auth | null = null;
+let googleProvider: GoogleAuthProvider | null = null;
+let firebaseInitError: string | null = null;
+
+if (isFirebaseConfigured) {
+  try {
+    app = initializeApp(firebaseConfig);
+    db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+    auth = getAuth(app);
+    googleProvider = new GoogleAuthProvider();
+    googleProvider.setCustomParameters({ prompt: 'select_account' });
+  } catch (err) {
+    firebaseInitError =
+      err instanceof Error ? err.message : 'Failed to initialize Firebase client SDK.';
+    app = null;
+    db = null;
+    auth = null;
+    googleProvider = null;
+  }
+} else {
+  firebaseInitError =
+    'Cloud sync is not configured yet (missing VITE_FIREBASE_* GitHub Secrets or firebase-applet-config.json). You can still use the 6-Month Sample Ledger locally.';
+}
+
+export { app, auth, db, firebaseInitError, googleProvider };
 
 let connectionTested = false;
 
 export async function testFirestoreConnection(): Promise<void> {
-  if (connectionTested) return;
+  if (connectionTested || !db) return;
   connectionTested = true;
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));

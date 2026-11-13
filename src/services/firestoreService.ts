@@ -64,13 +64,13 @@ export function handleFirestoreError(
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
+      userId: auth?.currentUser?.uid,
+      email: auth?.currentUser?.email,
+      emailVerified: auth?.currentUser?.emailVerified,
+      isAnonymous: auth?.currentUser?.isAnonymous,
+      tenantId: auth?.currentUser?.tenantId,
       providerInfo:
-        auth.currentUser?.providerData?.map((provider) => ({
+        auth?.currentUser?.providerData?.map((provider) => ({
           providerId: provider.providerId,
           email: provider.email,
         })) || [],
@@ -80,6 +80,13 @@ export function handleFirestoreError(
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
+}
+
+function requireDb() {
+  if (!db) {
+    throw new Error('Firestore is not configured. Add VITE_FIREBASE_* secrets or firebase-applet-config.json.');
+  }
+  return db;
 }
 
 function generateDocId(prefix: string): string {
@@ -103,7 +110,7 @@ export function subscribePreferences(
   onError: (err: Error) => void,
 ): Unsubscribe {
   const path = `users/${userId}/profile/preferences`;
-  const ref = doc(db, 'users', userId, 'profile', 'preferences');
+  const ref = doc(requireDb(), 'users', userId, 'profile', 'preferences');
   return onSnapshot(
     ref,
     (snap) => {
@@ -139,7 +146,7 @@ export async function savePreferences(
   },
 ): Promise<void> {
   const path = `users/${userId}/profile/preferences`;
-  const ref = doc(db, 'users', userId, 'profile', 'preferences');
+  const ref = doc(requireDb(), 'users', userId, 'profile', 'preferences');
   try {
     const existingSnap = await getDoc(ref);
     if (!existingSnap.exists()) {
@@ -169,7 +176,7 @@ export function subscribeExpenses(
   onError: (err: Error) => void,
 ): Unsubscribe {
   const path = `users/${userId}/expenses`;
-  const q = query(collection(db, 'users', userId, 'expenses'), where('ownerId', '==', userId));
+  const q = query(collection(requireDb(), 'users', userId, 'expenses'), where('ownerId', '==', userId));
   return onSnapshot(
     q,
     (snap) => {
@@ -208,7 +215,7 @@ export async function createExpense(userId: string, input: SanitizedExpenseInput
   const id = generateDocId('exp');
   const path = `users/${userId}/expenses/${id}`;
   try {
-    await setDoc(doc(db, 'users', userId, 'expenses', id), {
+    await setDoc(doc(requireDb(), 'users', userId, 'expenses', id), {
       ownerId: userId,
       title: input.title,
       amount: input.amount,
@@ -236,7 +243,7 @@ export async function updateExpense(
 ): Promise<void> {
   const path = `users/${userId}/expenses/${expenseId}`;
   try {
-    await updateDoc(doc(db, 'users', userId, 'expenses', expenseId), {
+    await updateDoc(doc(requireDb(), 'users', userId, 'expenses', expenseId), {
       title: input.title,
       amount: input.amount,
       currency: input.currency,
@@ -257,7 +264,7 @@ export async function updateExpense(
 export async function deleteExpense(userId: string, expenseId: string): Promise<void> {
   const path = `users/${userId}/expenses/${expenseId}`;
   try {
-    await deleteDoc(doc(db, 'users', userId, 'expenses', expenseId));
+    await deleteDoc(doc(requireDb(), 'users', userId, 'expenses', expenseId));
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, path);
   }
@@ -269,7 +276,7 @@ export function subscribeBudgets(
   onError: (err: Error) => void,
 ): Unsubscribe {
   const path = `users/${userId}/budgets`;
-  const q = query(collection(db, 'users', userId, 'budgets'), where('ownerId', '==', userId));
+  const q = query(collection(requireDb(), 'users', userId, 'budgets'), where('ownerId', '==', userId));
   return onSnapshot(
     q,
     (snap) => {
@@ -306,13 +313,13 @@ export async function upsertBudget(
   const path = `users/${userId}/budgets/${id}`;
   try {
     if (existingBudgetId) {
-      await updateDoc(doc(db, 'users', userId, 'budgets', id), {
+      await updateDoc(doc(requireDb(), 'users', userId, 'budgets', id), {
         monthlyLimit: input.monthlyLimit,
         alertThresholdPercent: input.alertThresholdPercent,
         updatedAt: serverTimestamp(),
       });
     } else {
-      await setDoc(doc(db, 'users', userId, 'budgets', id), {
+      await setDoc(doc(requireDb(), 'users', userId, 'budgets', id), {
         ownerId: userId,
         category: input.category,
         monthlyLimit: input.monthlyLimit,
@@ -330,7 +337,7 @@ export async function upsertBudget(
 export async function deleteBudget(userId: string, budgetId: string): Promise<void> {
   const path = `users/${userId}/budgets/${budgetId}`;
   try {
-    await deleteDoc(doc(db, 'users', userId, 'budgets', budgetId));
+    await deleteDoc(doc(requireDb(), 'users', userId, 'budgets', budgetId));
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, path);
   }
@@ -342,7 +349,7 @@ export function subscribeRecurringBills(
   onError: (err: Error) => void,
 ): Unsubscribe {
   const path = `users/${userId}/recurring`;
-  const q = query(collection(db, 'users', userId, 'recurring'), where('ownerId', '==', userId));
+  const q = query(collection(requireDb(), 'users', userId, 'recurring'), where('ownerId', '==', userId));
   return onSnapshot(
     q,
     (snap) => {
@@ -382,7 +389,7 @@ export async function createRecurringBill(
   const id = generateDocId('rec');
   const path = `users/${userId}/recurring/${id}`;
   try {
-    await setDoc(doc(db, 'users', userId, 'recurring', id), {
+    await setDoc(doc(requireDb(), 'users', userId, 'recurring', id), {
       ownerId: userId,
       title: input.title,
       amount: input.amount,
@@ -408,7 +415,7 @@ export async function updateRecurringBill(
 ): Promise<void> {
   const path = `users/${userId}/recurring/${billId}`;
   try {
-    await updateDoc(doc(db, 'users', userId, 'recurring', billId), {
+    await updateDoc(doc(requireDb(), 'users', userId, 'recurring', billId), {
       title: input.title,
       amount: input.amount,
       currency: input.currency,
@@ -433,8 +440,8 @@ export async function markRecurringBillPaid(
   const expId = generateDocId('exp');
   const path = `users/${userId}/recurring/${bill.id}`;
   try {
-    const batch = writeBatch(db);
-    batch.set(doc(db, 'users', userId, 'expenses', expId), {
+    const batch = writeBatch(requireDb());
+    batch.set(doc(requireDb(), 'users', userId, 'expenses', expId), {
       ownerId: userId,
       title: bill.title,
       amount: bill.amount,
@@ -449,7 +456,7 @@ export async function markRecurringBillPaid(
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    batch.update(doc(db, 'users', userId, 'recurring', bill.id), {
+    batch.update(doc(requireDb(), 'users', userId, 'recurring', bill.id), {
       nextDueDate: advanceRecurringDate(bill.nextDueDate, bill.cadence),
       lastPaidDate: paidDate,
       updatedAt: serverTimestamp(),
@@ -463,7 +470,7 @@ export async function markRecurringBillPaid(
 export async function deleteRecurringBill(userId: string, billId: string): Promise<void> {
   const path = `users/${userId}/recurring/${billId}`;
   try {
-    await deleteDoc(doc(db, 'users', userId, 'recurring', billId));
+    await deleteDoc(doc(requireDb(), 'users', userId, 'recurring', billId));
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, path);
   }
@@ -474,9 +481,9 @@ export async function seedSampleHistoryToCloud(userId: string): Promise<void> {
   const path = `users/${userId}/expenses`;
   const seedSuffix = Date.now().toString(36);
   try {
-    const prefsRef = doc(db, 'users', userId, 'profile', 'preferences');
+    const prefsRef = doc(requireDb(), 'users', userId, 'profile', 'preferences');
     const prefsSnap = await getDoc(prefsRef);
-    const batch = writeBatch(db);
+    const batch = writeBatch(requireDb());
     if (!prefsSnap.exists()) {
       batch.set(prefsRef, {
         ownerId: userId,
@@ -494,7 +501,7 @@ export async function seedSampleHistoryToCloud(userId: string): Promise<void> {
       });
     }
     for (const exp of sample.expenses) {
-      batch.set(doc(db, 'users', userId, 'expenses', `${exp.id}_${seedSuffix}`), {
+      batch.set(doc(requireDb(), 'users', userId, 'expenses', `${exp.id}_${seedSuffix}`), {
         ownerId: userId,
         title: exp.title,
         amount: exp.amount,
@@ -510,7 +517,7 @@ export async function seedSampleHistoryToCloud(userId: string): Promise<void> {
       });
     }
     for (const bgt of sample.budgets) {
-      batch.set(doc(db, 'users', userId, 'budgets', `${bgt.id}_${seedSuffix}`), {
+      batch.set(doc(requireDb(), 'users', userId, 'budgets', `${bgt.id}_${seedSuffix}`), {
         ownerId: userId,
         category: bgt.category,
         monthlyLimit: bgt.monthlyLimit,
@@ -520,7 +527,7 @@ export async function seedSampleHistoryToCloud(userId: string): Promise<void> {
       });
     }
     for (const rec of sample.recurringBills) {
-      batch.set(doc(db, 'users', userId, 'recurring', `${rec.id}_${seedSuffix}`), {
+      batch.set(doc(requireDb(), 'users', userId, 'recurring', `${rec.id}_${seedSuffix}`), {
         ownerId: userId,
         title: rec.title,
         amount: rec.amount,

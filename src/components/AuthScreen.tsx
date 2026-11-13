@@ -24,6 +24,7 @@ export function AuthScreen() {
   const {
     user,
     authError,
+    isCloudConfigured,
     isDemoMode,
     enterDemoMode,
     signInWithGoogle,
@@ -403,7 +404,7 @@ export function AuthScreen() {
 
               <button
                 type="submit"
-                disabled={busy}
+                disabled={busy || !isCloudConfigured}
                 className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-60"
               >
                 {busy
@@ -431,7 +432,7 @@ export function AuthScreen() {
             <div className="space-y-2.5">
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || !isCloudConfigured}
                 onClick={handleGoogle}
                 className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm font-medium flex items-center justify-center gap-2.5 transition-colors disabled:opacity-60"
               >

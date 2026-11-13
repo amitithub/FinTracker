@@ -40,6 +40,7 @@ FiinTrack/
 │   │   ├── app.ui.test.tsx           # End-to-end UI, theme toggle, navigation & full CRUD tests
 │   │   ├── currency.test.ts          # FX conversion, INR/JPY formatting & offline API fallback
 │   │   ├── export.test.ts            # RFC-4180 CSV formatting & formula-injection defense
+│   │   ├── security.pentest.test.tsx # Security, formula-injection, rules & fallback pentests
 │   │   └── validation.test.ts        # Input sanitization, calendar dates & auth validation
 │   ├── assets/
 │   │   └── images/                   # Bundled fintech backdrop image asset
@@ -56,7 +57,8 @@ FiinTrack/
 │   │   │   ├── RecurringView.tsx     # Recurring bills CRUD & one-tap Pay & Log
 │   │   │   └── ReportsView.tsx       # Historical filter bar, summary, CSV & print/PDF reports
 │   │   ├── AuthScreen.tsx            # Email/Password + Google auth, verification gate & preview CTA
-│   │   └── BackdropAtmosphere.tsx    # Translucent glassmorphic backdrop with gradient fallback
+│   │   ├── BackdropAtmosphere.tsx    # Translucent glassmorphic backdrop with gradient fallback
+│   │   └── ErrorBoundary.tsx         # Client error recovery UI preventing blank screens
 │   ├── contexts/
 │   │   ├── AuthContext.tsx           # Firebase Auth & Sample Preview session state
 │   │   ├── LedgerContext.tsx         # Real-time Firestore subscriptions, FX rates & CRUD actions
