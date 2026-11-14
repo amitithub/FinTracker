@@ -8,7 +8,7 @@ FinTrack is an MIT-licensed, zero-cost personal and household expense tracker bu
 - **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS v4 + Lucide Icons + Motion
 - **Cloud Sync & Auth**: Firebase Authentication (Email/Password + Google Sign-In) & Cloud Firestore (**Spark Free Tier**, zero paid plans)
 - **Live Currency Conversion**: Open-source, keyless [Frankfurter ECB API](https://www.frankfurter.app/) with built-in offline fallback rates (9 currencies, default `INR`)
-- **Hosting & CI/CD**: Free GitHub Pages static deployment via `.github/workflows/deploy-pages.yml`
+- **Hosting & CI/CD**: Free GitHub Pages static deployment to the `gh-pages` branch via `.github/workflows/deploy.yml`
 - **Testing & Security Auditing**: Vitest + React Testing Library + ESLint (`@firebase/eslint-plugin-security-rules`)
 
 ---
@@ -32,7 +32,7 @@ FinTrack is an MIT-licensed, zero-cost personal and household expense tracker bu
 FiinTrack/
 ├── .github/
 │   └── workflows/
-│       └── deploy-pages.yml          # CI/CD: lint, rules audit, Vitest, build & Pages deploy
+│       └── deploy.yml                # CI/CD: lint, rules audit, Vitest, build & gh-pages deploy
 ├── src/
 │   ├── __tests__/
 │   │   ├── setup.ts                  # Vitest & jsdom setup
@@ -80,7 +80,7 @@ FiinTrack/
 ├── .env.example                      # Sample environment variable placeholders (no secrets)
 ├── .gitignore
 ├── eslint.config.js                  # ESLint flat config for Firestore security rules
-├── firebase-applet-config.json       # Firebase web app & database configuration
+├── firebase-applet-config.json       # Local Firebase config (gitignored; CI uses VITE_FIREBASE_* Secrets)
 ├── firebase-blueprint.json           # Firestore schema blueprint
 ├── firestore.rules                   # Zero-trust owner-scoped Firestore security rules
 ├── index.html                        # HTML entry with zero-flash theme script
@@ -113,10 +113,10 @@ Before using cloud sync on your live GitHub Pages URL, complete these two free s
 ## Publish & Host on GitHub Pages (Free)
 
 ### Option A: Using AI Studio's GitHub Integration
-1. Use the **Save to GitHub** / GitHub sync control in your AI Studio toolbar to push this project to your `FiinTrack` repository.
-2. Open your `FiinTrack` repository on GitHub and navigate to **Settings → Pages → Build and deployment → Source**.
-3. Select **GitHub Actions**.
-4. Trigger or wait for the **Deploy FinTrack to GitHub Pages** workflow (`.github/workflows/deploy-pages.yml`) to finish; your site will go live at `https://<your-github-username>.github.io/FiinTrack/`.
+1. Use the **Save to GitHub** / GitHub sync control in your AI Studio toolbar to push this project to your `FinTracker` repository.
+2. Add your seven `VITE_FIREBASE_*` values under **Settings → Secrets and variables → Actions → Repository secrets** so Cloud Sync works on GitHub Pages without committing API keys.
+3. Trigger or wait for the **Deploy FinTrack to GitHub Pages** workflow (`.github/workflows/deploy.yml`) to finish and create the `gh-pages` branch.
+4. Open **Settings → Pages → Build and deployment → Source**, choose **Deploy from a branch**, select **`gh-pages`** and folder **`/ (root)`**, then click **Save**; your site will go live at `https://<your-github-username>.github.io/FinTracker/`.
 
 ### Option B: Push via Git CLI
 ```bash
@@ -124,14 +124,14 @@ git init
 git add .
 git commit -m "Initial commit: FinTrack open-source expense tracker"
 git branch -M main
-git remote add origin https://github.com/<your-username>/FiinTrack.git
+git remote add origin https://github.com/<your-username>/FinTracker.git
 git push -u origin main
 ```
-Then set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**.
+Then add your `VITE_FIREBASE_*` Actions Secrets, wait for `.github/workflows/deploy.yml` to push the `gh-pages` branch, and set **Settings → Pages → Build and deployment → Source** to **Deploy from a branch** (`gh-pages` / `/ (root)`).
 
 > **Troubleshooting a Blank Page / "FinTrack failed to start" on GitHub Pages:**
-> 1. Open **Settings → Pages → Build and deployment → Source** and verify it is set to **GitHub Actions** (not `Deploy from a branch`).
-> 2. Check `.github/workflows/` in your repository: if GitHub auto-created a `jekyll-gh-pages.yml` workflow, **delete `jekyll-gh-pages.yml`** so only `deploy-pages.yml` runs—otherwise the Jekyll workflow publishes the unbuilt root `index.html` and `/src/main.tsx` returns `404`.
+> 1. Open **Settings → Pages → Build and deployment → Source** and verify it is set to **Deploy from a branch** with branch **`gh-pages`** and folder **`/ (root)`** (not `main`, which holds unbuilt TypeScript entrypoints).
+> 2. Check `.github/workflows/` in your repository: if GitHub auto-created a `jekyll-gh-pages.yml` workflow, **delete `jekyll-gh-pages.yml`** so only `deploy.yml` runs—otherwise the Jekyll workflow publishes the unbuilt root `index.html` and `/src/main.tsx` returns `404`.
 
 ---
 

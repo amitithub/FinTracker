@@ -6,16 +6,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: "pages"
+  group: "gh-pages-deploy"
   cancel-in-progress: false
 
 jobs:
-  build_and_test:
+  build_and_deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -39,10 +37,18 @@ jobs:
           npm run lint
           npm run lint:rules
 
-      - name: Run Unit Tests
+      - name: Run Unit & Security Tests
         run: npm test
 
-      - name: Build static bundle
+      - name: Warn if Firebase Secrets are not configured
+        env:
+          HAS_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY != '' || vars.VITE_FIREBASE_API_KEY != '' }}
+        run: |
+          if [ "$HAS_FIREBASE_API_KEY" != "true" ]; then
+            echo "::warning::VITE_FIREBASE_API_KEY is not set in GitHub Actions Secrets or Variables. Deployed app will run in Sample Preview mode until secrets are configured."
+          fi
+
+      - name: Build static bundle (base './')
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY || vars.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN || vars.VITE_FIREBASE_AUTH_DOMAIN }}
@@ -53,18 +59,16 @@ jobs:
           VITE_FIREBASE_FIRESTORE_DATABASE_ID: ${{ secrets.VITE_FIREBASE_FIRESTORE_DATABASE_ID || vars.VITE_FIREBASE_FIRESTORE_DATABASE_ID }}
         run: npm run build
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./dist
+      - name: Prepare gh-pages static files (.nojekyll & 404.html)
+        run: |
+          grep -q '\./assets/' dist/index.html || (echo "Expected relative ./assets/ paths from Vite base: './'" && exit 1)
+          touch dist/.nojekyll
+          cp dist/index.html dist/404.html
 
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build_and_test
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          keep_files: false
