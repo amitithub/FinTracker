@@ -18,6 +18,7 @@ import { useLedger } from '../../contexts/LedgerContext';
 import {
   computeBudgetEvaluations,
   computeCategoryBreakdown,
+  computeDailySpendSeries,
   computeMonthComparison,
   computeMonthlyTotals,
   computeMonthlyTrend,
@@ -28,6 +29,7 @@ import {
 import { formatCurrency } from '../../lib/currency';
 import { Expense, ExpenseCategory } from '../../types/expense';
 import { CategoryDonutChart } from '../charts/CategoryDonutChart';
+import { DailySpendLineChart } from '../charts/DailySpendLineChart';
 import { SpendingTrendChart } from '../charts/SpendingTrendChart';
 
 interface OverviewViewProps {
@@ -64,6 +66,7 @@ export function OverviewView({
   const comparison = computeMonthComparison(expenses, activeMonthKey);
   const recentMonths = getRecentMonthKeys(activeMonthKey, 6);
   const trendData = computeMonthlyTrend(expenses, recentMonths);
+  const dailySeries = computeDailySpendSeries(expenses, activeMonthKey);
 
   const monthExpenses = expenses
     .filter((e) => e.monthKey === activeMonthKey)
@@ -325,6 +328,16 @@ export function OverviewView({
           />
         </div>
       </div>
+
+      {/* Daily Burn & Cumulative Pace Line Chart */}
+      <DailySpendLineChart
+        title={`${formatMonthLabel(activeMonthKey, true)} Spend Pace`}
+        subtitle="Cumulative burn curve and daily outlays across the selected month"
+        points={dailySeries}
+        baseCurrency={preferences.baseCurrency}
+        budgetLimit={preferences.monthlyBudgetLimit}
+        defaultSeries="cumulative"
+      />
 
       {/* Recent Transactions for Selected Month */}
       <div className="rounded-2xl bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border border-slate-200/90 dark:border-slate-800/90 overflow-hidden">

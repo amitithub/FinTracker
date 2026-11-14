@@ -10,18 +10,21 @@ import React, {
 import { advanceRecurringDate, getTodayDateStr } from '../lib/analytics';
 import { buildRatesForBase, convertCurrency, fetchLiveRates } from '../lib/currency';
 import { buildSampleDataset } from '../lib/demoData';
+import { downloadJson, generateBackupJson, parseAndValidateBackup } from '../lib/export';
 import {
   SanitizedBudgetInput,
   SanitizedExpenseInput,
   SanitizedRecurringInput,
 } from '../lib/validation';
 import {
+  batchCreateExpenses as fsBatchCreateExpenses,
   createExpense as fsCreateExpense,
   createRecurringBill as fsCreateRecurring,
   deleteBudget as fsDeleteBudget,
   deleteExpense as fsDeleteExpense,
   deleteRecurringBill as fsDeleteRecurring,
   markRecurringBillPaid as fsMarkRecurringPaid,
+  restoreBackupToCloud,
   savePreferences as fsSavePreferences,
   seedSampleHistoryToCloud,
   subscribeBudgets,
@@ -62,6 +65,7 @@ interface LedgerContextValue {
   dismissToast: (id: string) => void;
   pushToast: (type: ToastMessage['type'], message: string) => void;
   addExpense: (input: SanitizedExpenseInput) => Promise<void>;
+  importExpenses: (items: SanitizedExpenseInput[]) => Promise<number>;
   editExpense: (id: string, input: SanitizedExpenseInput) => Promise<void>;
   removeExpense: (id: string) => Promise<void>;
   saveBudget: (existingId: string | null, input: SanitizedBudgetInput) => Promise<void>;
@@ -77,6 +81,12 @@ interface LedgerContextValue {
   }) => Promise<void>;
   toggleAppTheme: () => Promise<void>;
   loadSampleHistory: () => Promise<void>;
+  downloadBackup: () => void;
+  restoreBackup: (rawJson: string) => Promise<{
+    expensesCount: number;
+    budgetsCount: number;
+    recurringCount: number;
+  }>;
 }
 
 const LedgerContext = createContext<LedgerContextValue | null>(null);
@@ -241,6 +251,30 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       if (!user) return;
       await fsCreateExpense(user.uid, input);
       pushToast('success', `Saved "${input.title}" to cloud ledger.`);
+    },
+    [isDemoMode, user, pushToast],
+  );
+
+  const importExpenses = useCallback(
+    async (items: SanitizedExpenseInput[]) => {
+      if (items.length === 0) return 0;
+      if (isDemoMode) {
+        const suffix = Date.now().toString(36);
+        const created: Expense[] = items.map((input, idx) => ({
+          id: `demo_imp_${suffix}_${idx}`,
+          ownerId: 'demo-user',
+          ...input,
+        }));
+        setExpenses((prev) => [...created, ...prev]);
+        pushToast('success', `Imported ${items.length} expenses in preview mode.`);
+        return items.length;
+      }
+      if (!user) {
+        throw new Error('Sign in or enter preview mode to import expenses.');
+      }
+      await fsBatchCreateExpenses(user.uid, items);
+      pushToast('success', `Imported ${items.length} expenses to cloud ledger.`);
+      return items.length;
     },
     [isDemoMode, user, pushToast],
   );
@@ -475,6 +509,87 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     pushToast('success', 'Loaded 6 months of sample history into your cloud ledger.');
   }, [isDemoMode, user, pushToast]);
 
+  const downloadBackup = useCallback(() => {
+    const json = generateBackupJson({
+      preferences,
+      expenses,
+      budgets,
+      recurringBills,
+    });
+    const dateStamp = getTodayDateStr();
+    downloadJson(json, `fintrack-backup-${dateStamp}.json`);
+    pushToast(
+      'success',
+      `Downloaded backup (${expenses.length} expenses, ${budgets.length} budgets, ${recurringBills.length} bills).`,
+    );
+  }, [preferences, expenses, budgets, recurringBills, pushToast]);
+
+  const restoreBackup = useCallback(
+    async (rawJson: string) => {
+      const parsed = parseAndValidateBackup(rawJson);
+      if (!parsed.valid) {
+        throw new Error(parsed.error);
+      }
+      const data = parsed.data;
+      lastRemoteThemeRef.current = data.preferences.themePreference;
+      setThemePreference(data.preferences.themePreference);
+
+      if (isDemoMode) {
+        const suffix = Date.now().toString(36);
+        setPreferences({
+          ownerId: 'demo-user',
+          ...data.preferences,
+        });
+        setExpenses(
+          data.expenses.map((e, i) => ({
+            id: `demo_bk_exp_${suffix}_${i}`,
+            ownerId: 'demo-user',
+            ...e,
+          })),
+        );
+        setBudgets(
+          data.budgets.map((b, i) => ({
+            id: `demo_bk_bgt_${suffix}_${i}`,
+            ownerId: 'demo-user',
+            ...b,
+          })),
+        );
+        setRecurringBills(
+          data.recurringBills.map((r, i) => ({
+            id: `demo_bk_rec_${suffix}_${i}`,
+            ownerId: 'demo-user',
+            ...r,
+          })),
+        );
+        pushToast(
+          'success',
+          `Restored ${data.expenses.length} expenses, ${data.budgets.length} budgets, and ${data.recurringBills.length} bills.`,
+        );
+        return {
+          expensesCount: data.expenses.length,
+          budgetsCount: data.budgets.length,
+          recurringCount: data.recurringBills.length,
+        };
+      }
+
+      if (!user) {
+        throw new Error('Sign in or enter preview mode to restore a backup.');
+      }
+
+      await restoreBackupToCloud(user.uid, data);
+      pushToast(
+        'success',
+        `Restored ${data.expenses.length} expenses, ${data.budgets.length} budgets, and ${data.recurringBills.length} bills to cloud ledger.`,
+      );
+      return {
+        expensesCount: data.expenses.length,
+        budgetsCount: data.budgets.length,
+        recurringCount: data.recurringBills.length,
+      };
+    },
+    [isDemoMode, user, setThemePreference, pushToast],
+  );
+
   const value = useMemo(
     () => ({
       expenses,
@@ -489,6 +604,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       dismissToast,
       pushToast,
       addExpense,
+      importExpenses,
       editExpense,
       removeExpense,
       saveBudget,
@@ -500,6 +616,8 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       updatePreferences,
       toggleAppTheme,
       loadSampleHistory,
+      downloadBackup,
+      restoreBackup,
     }),
     [
       expenses,
@@ -514,6 +632,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       dismissToast,
       pushToast,
       addExpense,
+      importExpenses,
       editExpense,
       removeExpense,
       saveBudget,
@@ -525,6 +644,8 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       updatePreferences,
       toggleAppTheme,
       loadSampleHistory,
+      downloadBackup,
+      restoreBackup,
     ],
   );
 

@@ -205,7 +205,8 @@ export function computeBudgetEvaluations(
   return { overall, categories };
 }
 
-export type ReportRange = 'month' | '3m' | '6m' | 'ytd' | 'all';
+export type ReportRange = 'month' | '3m' | '6m' | 'ytd' | 'all' | 'custom';
+export type ExpenseSortOrder = 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc';
 
 export interface ExpenseFilterOptions {
   range: ReportRange;
@@ -213,12 +214,17 @@ export interface ExpenseFilterOptions {
   category: ExpenseCategory | 'All';
   currency: CurrencyCode | 'All';
   searchQuery: string;
+  dateFrom?: string;
+  dateTo?: string;
+  minAmount?: number | null;
+  maxAmount?: number | null;
+  sortBy?: ExpenseSortOrder;
 }
 
 export function filterExpenses(expenses: Expense[], opts: ExpenseFilterOptions): Expense[] {
   const query = opts.searchQuery.trim().toLowerCase();
   const validMonths: Set<string> | null = (() => {
-    if (opts.range === 'all') return null;
+    if (opts.range === 'all' || opts.range === 'custom') return null;
     if (opts.range === 'month') return new Set([opts.referenceMonthKey]);
     if (opts.range === '3m') return new Set(getRecentMonthKeys(opts.referenceMonthKey, 3));
     if (opts.range === '6m') return new Set(getRecentMonthKeys(opts.referenceMonthKey, 6));
@@ -232,18 +238,156 @@ export function filterExpenses(expenses: Expense[], opts: ExpenseFilterOptions):
     return set;
   })();
 
+  const dateFrom = opts.range === 'custom' && opts.dateFrom ? opts.dateFrom.trim() : '';
+  const dateTo = opts.range === 'custom' && opts.dateTo ? opts.dateTo.trim() : '';
+  const minAmount =
+    opts.minAmount !== undefined && opts.minAmount !== null && Number.isFinite(opts.minAmount)
+      ? opts.minAmount
+      : null;
+  const maxAmount =
+    opts.maxAmount !== undefined && opts.maxAmount !== null && Number.isFinite(opts.maxAmount)
+      ? opts.maxAmount
+      : null;
+
+  const sortBy = opts.sortBy || 'date-desc';
+
   return expenses
     .filter((e) => {
       if (validMonths && !validMonths.has(e.monthKey)) return false;
+      if (dateFrom && e.date < dateFrom) return false;
+      if (dateTo && e.date > dateTo) return false;
       if (opts.category !== 'All' && e.category !== opts.category) return false;
       if (opts.currency !== 'All' && e.currency !== opts.currency) return false;
+      if (minAmount !== null && e.convertedAmount < minAmount) return false;
+      if (maxAmount !== null && e.convertedAmount > maxAmount) return false;
       if (query) {
         const hay = `${e.title} ${e.category} ${e.notes} ${e.currency}`.toLowerCase();
         if (!hay.includes(query)) return false;
       }
       return true;
     })
-    .sort((a, b) => b.date.localeCompare(a.date) || b.title.localeCompare(a.title));
+    .sort((a, b) => {
+      if (sortBy === 'date-asc') {
+        return a.date.localeCompare(b.date) || a.title.localeCompare(b.title);
+      }
+      if (sortBy === 'amount-desc') {
+        return b.convertedAmount - a.convertedAmount || b.date.localeCompare(a.date);
+      }
+      if (sortBy === 'amount-asc') {
+        return a.convertedAmount - b.convertedAmount || b.date.localeCompare(a.date);
+      }
+      return b.date.localeCompare(a.date) || b.title.localeCompare(a.title);
+    });
+}
+
+export interface LineSeriesPoint {
+  key: string;
+  label: string;
+  shortLabel: string;
+  total: number;
+  cumulative: number;
+  count: number;
+}
+
+/**
+ * Computes day-by-day spending and cumulative burn trajectory for a single YYYY-MM month.
+ */
+export function computeDailySpendSeries(expenses: Expense[], monthKey: string): LineSeriesPoint[] {
+  const days = getDaysInMonth(monthKey);
+  const byDay = new Map<string, { total: number; count: number }>();
+  for (const e of expenses) {
+    if (e.monthKey !== monthKey) continue;
+    const prev = byDay.get(e.date) || { total: 0, count: 0 };
+    byDay.set(e.date, {
+      total: prev.total + e.convertedAmount,
+      count: prev.count + 1,
+    });
+  }
+
+  let running = 0;
+  const points: LineSeriesPoint[] = [];
+  for (let d = 1; d <= days; d++) {
+    const dayStr = String(d).padStart(2, '0');
+    const dateKey = `${monthKey}-${dayStr}`;
+    const entry = byDay.get(dateKey) || { total: 0, count: 0 };
+    const rounded = Math.round(entry.total * 100) / 100;
+    running = Math.round((running + rounded) * 100) / 100;
+    points.push({
+      key: dateKey,
+      label: dateKey,
+      shortLabel: String(d),
+      total: rounded,
+      cumulative: running,
+      count: entry.count,
+    });
+  }
+  return points;
+}
+
+/**
+ * Builds an adaptive chronological line series from arbitrary filtered expenses:
+ * groups by day if all entries fall within <= 45 days, otherwise aggregates by month.
+ */
+export function computeFilteredLineSeries(expenses: Expense[]): {
+  granularity: 'daily' | 'monthly';
+  points: LineSeriesPoint[];
+} {
+  if (expenses.length === 0) {
+    return { granularity: 'monthly', points: [] };
+  }
+
+  const uniqueMonths = Array.from(new Set(expenses.map((e) => e.monthKey))).sort();
+  if (uniqueMonths.length <= 1) {
+    const byDate = new Map<string, { total: number; count: number }>();
+    for (const e of expenses) {
+      const prev = byDate.get(e.date) || { total: 0, count: 0 };
+      byDate.set(e.date, {
+        total: prev.total + e.convertedAmount,
+        count: prev.count + 1,
+      });
+    }
+    const sortedDates = Array.from(byDate.keys()).sort();
+    let running = 0;
+    const points = sortedDates.map((dateKey) => {
+      const entry = byDate.get(dateKey)!;
+      const rounded = Math.round(entry.total * 100) / 100;
+      running = Math.round((running + rounded) * 100) / 100;
+      return {
+        key: dateKey,
+        label: dateKey,
+        shortLabel: dateKey.slice(5), // MM-DD
+        total: rounded,
+        cumulative: running,
+        count: entry.count,
+      };
+    });
+    return { granularity: 'daily', points };
+  }
+
+  const byMonth = new Map<string, { total: number; count: number }>();
+  for (const e of expenses) {
+    const prev = byMonth.get(e.monthKey) || { total: 0, count: 0 };
+    byMonth.set(e.monthKey, {
+      total: prev.total + e.convertedAmount,
+      count: prev.count + 1,
+    });
+  }
+  let running = 0;
+  const points = uniqueMonths.map((mk) => {
+    const entry = byMonth.get(mk)!;
+    const rounded = Math.round(entry.total * 100) / 100;
+    running = Math.round((running + rounded) * 100) / 100;
+    const label = formatMonthLabel(mk, false);
+    return {
+      key: mk,
+      label,
+      shortLabel: label.split(' ')[0],
+      total: rounded,
+      cumulative: running,
+      count: entry.count,
+    };
+  });
+  return { granularity: 'monthly', points };
 }
 
 export function collectAvailableMonths(expenses: Expense[], currentMonthKey: string): string[] {

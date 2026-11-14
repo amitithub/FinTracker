@@ -16,8 +16,10 @@ jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (with full history for checkpoints)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -40,12 +42,25 @@ jobs:
       - name: Run Unit & Security Tests
         run: npm test
 
-      - name: Warn if Firebase Secrets are not configured
+      - name: Check Firebase configuration presence (boolean only)
         env:
-          HAS_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY != '' || vars.VITE_FIREBASE_API_KEY != '' }}
+          HAS_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY != '' || vars.VITE_FIREBASE_API_KEY != '' }}
+          HAS_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN != '' || vars.VITE_FIREBASE_AUTH_DOMAIN != '' }}
+          HAS_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID != '' || vars.VITE_FIREBASE_PROJECT_ID != '' }}
+          HAS_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID != '' || vars.VITE_FIREBASE_APP_ID != '' }}
+          HAS_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET != '' || vars.VITE_FIREBASE_STORAGE_BUCKET != '' }}
+          HAS_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID != '' || vars.VITE_FIREBASE_MESSAGING_SENDER_ID != '' }}
+          HAS_DB_ID: ${{ secrets.VITE_FIREBASE_FIRESTORE_DATABASE_ID != '' || vars.VITE_FIREBASE_FIRESTORE_DATABASE_ID != '' }}
         run: |
-          if [ "$HAS_FIREBASE_API_KEY" != "true" ]; then
-            echo "::warning::VITE_FIREBASE_API_KEY is not set in GitHub Actions Secrets or Variables. Deployed app will run in Sample Preview mode until secrets are configured."
+          echo "VITE_FIREBASE_API_KEY set: $HAS_API_KEY"
+          echo "VITE_FIREBASE_AUTH_DOMAIN set: $HAS_AUTH_DOMAIN"
+          echo "VITE_FIREBASE_PROJECT_ID set: $HAS_PROJECT_ID"
+          echo "VITE_FIREBASE_APP_ID set: $HAS_APP_ID"
+          echo "VITE_FIREBASE_STORAGE_BUCKET set: $HAS_STORAGE_BUCKET"
+          echo "VITE_FIREBASE_MESSAGING_SENDER_ID set: $HAS_SENDER_ID"
+          echo "VITE_FIREBASE_FIRESTORE_DATABASE_ID set: $HAS_DB_ID"
+          if [ "$HAS_API_KEY" != "true" ] || [ "$HAS_AUTH_DOMAIN" != "true" ] || [ "$HAS_PROJECT_ID" != "true" ] || [ "$HAS_APP_ID" != "true" ]; then
+            echo "::warning::One or more required VITE_FIREBASE_* Repository Secrets/Variables are not set. Ensure they are added under Settings -> Secrets and variables -> Actions -> Repository secrets (not Environment secrets)."
           fi
 
       - name: Build static bundle (base './')
@@ -64,6 +79,50 @@ jobs:
           grep -q '\./assets/' dist/index.html || (echo "Expected relative ./assets/ paths from Vite base: './'" && exit 1)
           touch dist/.nojekyll
           cp dist/index.html dist/404.html
+
+      - name: Snapshot previous gh-pages & create GitHub Checkpoint Tag + Backup Archive
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # 1. Preserve the previous live gh-pages branch into gh-pages-backup before overwriting
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch origin gh-pages:refs/remotes/origin/gh-pages
+            git push origin refs/remotes/origin/gh-pages:refs/heads/gh-pages-backup --force
+            echo "Backed up previous live gh-pages commit to branch: gh-pages-backup"
+          fi
+
+          # 2. Create immutable checkpoint tag on this source commit
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          STAMP=$(date -u +%Y%m%d-%H%M%S)
+          CHECKPOINT_TAG="checkpoint-${STAMP}-${SHORT_SHA}"
+          echo "CHECKPOINT_TAG=${CHECKPOINT_TAG}" >> "$GITHUB_ENV"
+
+          git tag -a "$CHECKPOINT_TAG" -m "FinTrack verified checkpoint ${CHECKPOINT_TAG} (commit ${SHORT_SHA})"
+          git push origin "refs/tags/${CHECKPOINT_TAG}"
+
+          # 3. Package full source + production dist backup archives
+          mkdir -p /tmp/checkpoint-backup
+          git archive --format=tar.gz --prefix="fintrack-source-${CHECKPOINT_TAG}/" HEAD \
+            > "/tmp/checkpoint-backup/fintrack-source-${CHECKPOINT_TAG}.tar.gz"
+          tar -czf "/tmp/checkpoint-backup/fintrack-dist-${CHECKPOINT_TAG}.tar.gz" -C dist .
+
+          # 4. Publish Release snapshot for one-click download or rollback reference
+          gh release create "$CHECKPOINT_TAG" \
+            "/tmp/checkpoint-backup/fintrack-source-${CHECKPOINT_TAG}.tar.gz" \
+            "/tmp/checkpoint-backup/fintrack-dist-${CHECKPOINT_TAG}.tar.gz" \
+            --title "Checkpoint ${CHECKPOINT_TAG}" \
+            --notes "Automated verified backup and rollback checkpoint for commit ${GITHUB_SHA}. Restore via Actions -> Restore FinTrack Checkpoint using tag '${CHECKPOINT_TAG}' or branch 'gh-pages-backup'." \
+            || echo "::warning::Skipped GitHub Release creation; checkpoint tag and workflow artifact are still preserved."
+
+      - name: Upload 90-day Checkpoint Backup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkpoint-${{ env.CHECKPOINT_TAG }}
+          path: /tmp/checkpoint-backup/
+          retention-days: 90
 
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4

@@ -18,6 +18,7 @@ import {
 import { AuthScreen } from './components/AuthScreen';
 import { BackdropAtmosphere } from './components/BackdropAtmosphere';
 import { ExpenseModal } from './components/modals/ExpenseModal';
+import { ImportExpensesModal } from './components/modals/ImportExpensesModal';
 import { SettingsModal } from './components/modals/SettingsModal';
 import { BudgetsView } from './components/views/BudgetsView';
 import { OverviewView } from './components/views/OverviewView';
@@ -46,6 +47,7 @@ function LedgerShell() {
   const [reportCategoryFilter, setReportCategoryFilter] = useState<ExpenseCategory | 'All'>('All');
   const [expenseModalOpen, setExpenseModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   if (loading) {
@@ -179,7 +181,7 @@ function LedgerShell() {
       </aside>
 
       {/* Main Content Wrapper */}
-      <div className="relative z-10 flex-1 lg:pl-64 flex flex-col min-w-0">
+      <div className="print-main-shell relative z-10 flex-1 lg:pl-64 flex flex-col min-w-0">
         {/* Top Bar (Compact 52px on mobile, 64px on desktop) */}
         <header className="no-print sticky top-0 z-30 h-13 lg:h-16 px-4 sm:px-6 lg:px-8 border-b border-slate-200/90 dark:border-slate-800/90 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -328,6 +330,7 @@ function LedgerShell() {
                   activeMonthKey={activeMonthKey}
                   initialCategoryFilter={reportCategoryFilter}
                   onEditExpense={openEditModal}
+                  onOpenImport={() => setImportModalOpen(true)}
                 />
               )}
               {activeTab === 'budgets' && <BudgetsView activeMonthKey={activeMonthKey} />}
@@ -439,7 +442,15 @@ function LedgerShell() {
         editingExpense={editingExpense}
         onClose={() => setExpenseModalOpen(false)}
       />
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <ImportExpensesModal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+      />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onOpenImport={() => setImportModalOpen(true)}
+      />
     </div>
   );
 }

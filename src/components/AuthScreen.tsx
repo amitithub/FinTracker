@@ -390,9 +390,16 @@ export function AuthScreen() {
               {visibleError && (
                 <div
                   role="alert"
-                  className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs text-rose-700 dark:text-rose-300 leading-relaxed"
+                  className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs text-rose-700 dark:text-rose-300 leading-relaxed space-y-1.5"
                 >
-                  {visibleError}
+                  <p>{visibleError}</p>
+                  {!isCloudConfigured && (
+                    <p className="text-[11px] text-rose-600/90 dark:text-rose-300/90">
+                      On GitHub Pages: ensure all keys are saved under{' '}
+                      <strong>Settings → Secrets and variables → Actions → Repository secrets</strong>{' '}
+                      (not Environment secrets) and re-run <strong>Deploy FinTrack to GitHub Pages</strong>.
+                    </p>
+                  )}
                 </div>
               )}
 

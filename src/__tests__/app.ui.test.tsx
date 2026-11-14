@@ -83,6 +83,11 @@ describe('FinTrack interactive flows, theme switching, CRUD operations, charts &
     expect(await screen.findByText('Financial Overview')).toBeInTheDocument();
     expect(screen.getByText('6-Month Spending Trend')).toBeInTheDocument();
     expect(screen.getByText('Category Breakdown')).toBeInTheDocument();
+    expect(screen.getByText(/Spend Pace/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Line$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Bar$/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Bar$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Line$/i }));
 
     // Toggle Dark -> Light -> Dark inside main dashboard shell
     const sidebarThemeBtn = screen.getByRole('button', { name: /Toggle dark mode/i });
@@ -93,9 +98,11 @@ describe('FinTrack interactive flows, theme switching, CRUD operations, charts &
     fireEvent.click(sidebarThemeBtn);
     expect(document.documentElement.classList.contains('dark')).toBe(true);
 
-    // Verify Settings modal reflects current Dark theme and allows switching back to Light
+    // Verify Settings modal reflects current Dark theme, Backup/Restore controls, and allows switching back to Light
     fireEvent.click(screen.getByRole('button', { name: /^Settings$/i }));
     expect(await screen.findByText('Reporting Preferences')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Download Backup/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Restore JSON/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^light$/i }));
     fireEvent.click(screen.getByRole('button', { name: /Save Preferences/i }));
     await waitFor(() => {
@@ -137,14 +144,52 @@ describe('FinTrack interactive flows, theme switching, CRUD operations, charts &
     });
     expect(screen.getByText('Vitest Espresso Bar')).toBeInTheDocument();
 
-    // 3. Navigate to Reports & verify filtering + CSV export + DELETE Expense (2-step inline)
+    // 3. Navigate to Reports & verify dropdown filters + CSV/Excel import + line chart + Backup JSON + CSV export + DELETE Expense
     fireEvent.click(screen.getAllByRole('button', { name: /Reports/i })[0]);
     expect(await screen.findByRole('button', { name: /Export CSV/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Import CSV \/ Excel/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Backup JSON/i })).toBeInTheDocument();
+    expect(screen.getByText('Filtered Spending Line Chart')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Custom Dates/i })).toBeInTheDocument();
 
+    // Test Category & Date/Period filter dropdowns
+    const categorySelect = screen.getByLabelText(/Filter by category/i);
+    const datePeriodSelect = screen.getByLabelText(/Filter by date or period/i);
+    fireEvent.change(categorySelect, { target: { value: 'Transport' } });
+    fireEvent.change(datePeriodSelect, { target: { value: '3m' } });
+    fireEvent.change(categorySelect, { target: { value: 'All' } });
+    fireEvent.change(datePeriodSelect, { target: { value: 'all' } });
+
+    // Test CSV/Excel Expense Upload Modal
+    fireEvent.click(screen.getByRole('button', { name: /Import CSV \/ Excel/i }));
+    expect(await screen.findByText(/Import Expenses \(CSV or Excel\)/i)).toBeInTheDocument();
+    const csvContent =
+      'Date,Title,Category,Original Amount,Original Currency,Notes\n2026-11-13,CSV Imported Lunch,Food & Dining,320,INR,Uploaded via test';
+    const csvFile = new File([csvContent], 'expenses.csv', { type: 'text/csv' });
+    Object.defineProperty(csvFile, 'arrayBuffer', {
+      value: async () => new TextEncoder().encode(csvContent).buffer,
+    });
+    Object.defineProperty(csvFile, 'text', {
+      value: async () => csvContent,
+    });
+    const fileInput = screen.getByLabelText(/Upload expense CSV or Excel file/i);
+    fireEvent.change(fileInput, { target: { files: [csvFile] } });
+    expect(await screen.findByRole('button', { name: /Import 1 Expense/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Import 1 Expense/i }));
+    await waitFor(() => {
+      expect(screen.queryByText(/Import Expenses \(CSV or Excel\)/i)).not.toBeInTheDocument();
+    });
+    expect(screen.getAllByText('CSV Imported Lunch').length).toBeGreaterThan(0);
+
+    // Test Description Search + Clear search + Delete Expense
     fireEvent.change(screen.getByLabelText(/Search expenses/i), {
       target: { value: 'Vitest Espresso' },
     });
     expect(screen.getAllByText('Vitest Espresso Bar').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /Clear description search/i }));
+    fireEvent.change(screen.getByLabelText(/Search expenses/i), {
+      target: { value: 'Vitest Espresso' },
+    });
 
     const deleteExpenseBtns = screen.getAllByRole('button', { name: /Delete Vitest Espresso Bar/i });
     fireEvent.click(deleteExpenseBtns[0]);

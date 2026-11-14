@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Database, X } from 'lucide-react';
+import { Database, Download, FileSpreadsheet, Upload, X } from 'lucide-react';
 import { useLedger } from '../../contexts/LedgerContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
@@ -14,11 +14,24 @@ import {
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
+  onOpenImport?: () => void;
 }
 
-export function SettingsModal({ open, onClose }: SettingsModalProps) {
-  const { preferences, rateSource, updatePreferences, loadSampleHistory, pushToast } = useLedger();
+export function SettingsModal({ open, onClose, onOpenImport }: SettingsModalProps) {
+  const {
+    expenses,
+    budgets,
+    recurringBills,
+    preferences,
+    rateSource,
+    updatePreferences,
+    loadSampleHistory,
+    downloadBackup,
+    restoreBackup,
+    pushToast,
+  } = useLedger();
   const { preference: activeThemePreference } = useTheme();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [baseCurrency, setBaseCurrency] = useState<CurrencyCode>(preferences.baseCurrency);
   const [monthlyBudgetLimit, setMonthlyBudgetLimit] = useState(
@@ -27,6 +40,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [themePreference, setThemePreference] = useState<ThemePreference>(activeThemePreference);
   const [saving, setSaving] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -66,6 +80,23 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       pushToast('error', err instanceof Error ? err.message : 'Failed to load sample history.');
     } finally {
       setSeeding(false);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setRestoring(true);
+    try {
+      const text = await file.text();
+      await restoreBackup(text);
+      onClose();
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Could not restore backup file.');
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -131,7 +162,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   ))}
                 </select>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
-                  FX source: {rateSource === 'live' ? 'Live ECB rates (Frankfurter)' : 'Built-in offline reference rates'}
+                  FX source:{' '}
+                  {rateSource === 'live'
+                    ? 'Live ECB rates (Frankfurter)'
+                    : 'Built-in offline reference rates'}
                 </p>
               </div>
 
@@ -173,6 +207,58 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Data Backup & Restore */}
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    Data Backup &amp; Restore
+                  </span>
+                  <span className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                    {expenses.length} exp · {budgets.length} bgt · {recurringBills.length} bills
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={downloadBackup}
+                    className="min-h-[42px] px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download Backup
+                  </button>
+                  <button
+                    type="button"
+                    disabled={restoring}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="min-h-[42px] px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    {restoring ? 'Restoring...' : 'Restore JSON'}
+                  </button>
+                </div>
+                {onOpenImport && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenImport();
+                    }}
+                    className="w-full min-h-[42px] px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    Import Expenses from CSV / Excel
+                  </button>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={handleFileChange}
+                  aria-label="Restore backup JSON file"
+                  className="hidden"
+                />
               </div>
 
               <div className="pt-2 border-t border-slate-200 dark:border-slate-800">

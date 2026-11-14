@@ -11,7 +11,8 @@
     "lint": "tsc --noEmit",
     "lint:rules": "eslint firestore.rules",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "checkpoint": "bash scripts/checkpoint-publish.sh"
   },
   "dependencies": {
     "@firebase/eslint-plugin-security-rules": "^0.0.2",
@@ -29,6 +30,7 @@
     "motion": "^12.23.24",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "read-excel-file": "^9.3.17",
     "vite": "^8.3.0",
     "vitest": "^5.1.0"
   },

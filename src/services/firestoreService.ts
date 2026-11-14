@@ -236,6 +236,45 @@ export async function createExpense(userId: string, input: SanitizedExpenseInput
   }
 }
 
+export async function batchCreateExpenses(
+  userId: string,
+  items: SanitizedExpenseInput[],
+): Promise<void> {
+  if (items.length === 0) return;
+  const path = `users/${userId}/expenses`;
+  const batchSuffix = Date.now().toString(36);
+  try {
+    const database = requireDb();
+    const CHUNK_SIZE = 400;
+    for (let start = 0; start < items.length; start += CHUNK_SIZE) {
+      const slice = items.slice(start, start + CHUNK_SIZE);
+      const batch = writeBatch(database);
+      for (let i = 0; i < slice.length; i++) {
+        const input = slice[i];
+        const id = `exp_imp_${batchSuffix}_${start + i}`;
+        batch.set(doc(database, 'users', userId, 'expenses', id), {
+          ownerId: userId,
+          title: input.title,
+          amount: input.amount,
+          currency: input.currency,
+          exchangeRate: input.exchangeRate,
+          convertedAmount: input.convertedAmount,
+          category: input.category,
+          date: input.date,
+          monthKey: input.monthKey,
+          notes: input.notes,
+          ...(input.recurringId ? { recurringId: input.recurringId } : {}),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.CREATE, path);
+  }
+}
+
 export async function updateExpense(
   userId: string,
   expenseId: string,
@@ -542,6 +581,130 @@ export async function seedSampleHistoryToCloud(userId: string): Promise<void> {
       });
     }
     await batch.commit();
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
+export async function restoreBackupToCloud(
+  userId: string,
+  backup: {
+    preferences: {
+      baseCurrency: CurrencyCode;
+      monthlyBudgetLimit: number;
+      themePreference: ThemePreference;
+    };
+    expenses: SanitizedExpenseInput[];
+    budgets: SanitizedBudgetInput[];
+    recurringBills: SanitizedRecurringInput[];
+  },
+): Promise<void> {
+  const path = `users/${userId}/expenses`;
+  const restoreSuffix = Date.now().toString(36);
+  try {
+    const database = requireDb();
+    const prefsRef = doc(database, 'users', userId, 'profile', 'preferences');
+    const prefsSnap = await getDoc(prefsRef);
+
+    type WriteOp = () => void;
+    const ops: WriteOp[] = [];
+    let currentBatch = writeBatch(database);
+    let opCount = 0;
+
+    const commitAndReset = async () => {
+      if (opCount > 0) {
+        await currentBatch.commit();
+        currentBatch = writeBatch(database);
+        opCount = 0;
+      }
+    };
+
+    const enqueue = async (fn: (b: ReturnType<typeof writeBatch>) => void) => {
+      fn(currentBatch);
+      opCount += 1;
+      if (opCount >= 400) {
+        await commitAndReset();
+      }
+    };
+
+    await enqueue((b) => {
+      if (!prefsSnap.exists()) {
+        b.set(prefsRef, {
+          ownerId: userId,
+          baseCurrency: backup.preferences.baseCurrency,
+          monthlyBudgetLimit: backup.preferences.monthlyBudgetLimit,
+          themePreference: backup.preferences.themePreference,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        b.update(prefsRef, {
+          baseCurrency: backup.preferences.baseCurrency,
+          monthlyBudgetLimit: backup.preferences.monthlyBudgetLimit,
+          themePreference: backup.preferences.themePreference,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    });
+
+    for (let i = 0; i < backup.expenses.length; i++) {
+      const exp = backup.expenses[i];
+      const expId = `exp_bk_${restoreSuffix}_${i}`;
+      await enqueue((b) => {
+        b.set(doc(database, 'users', userId, 'expenses', expId), {
+          ownerId: userId,
+          title: exp.title,
+          amount: exp.amount,
+          currency: exp.currency,
+          exchangeRate: exp.exchangeRate,
+          convertedAmount: exp.convertedAmount,
+          category: exp.category,
+          date: exp.date,
+          monthKey: exp.monthKey,
+          notes: exp.notes,
+          ...(exp.recurringId ? { recurringId: exp.recurringId } : {}),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      });
+    }
+
+    for (let i = 0; i < backup.budgets.length; i++) {
+      const bgt = backup.budgets[i];
+      const bgtId = `bgt_bk_${restoreSuffix}_${i}`;
+      await enqueue((b) => {
+        b.set(doc(database, 'users', userId, 'budgets', bgtId), {
+          ownerId: userId,
+          category: bgt.category,
+          monthlyLimit: bgt.monthlyLimit,
+          alertThresholdPercent: bgt.alertThresholdPercent,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      });
+    }
+
+    for (let i = 0; i < backup.recurringBills.length; i++) {
+      const rec = backup.recurringBills[i];
+      const recId = `rec_bk_${restoreSuffix}_${i}`;
+      await enqueue((b) => {
+        b.set(doc(database, 'users', userId, 'recurring', recId), {
+          ownerId: userId,
+          title: rec.title,
+          amount: rec.amount,
+          currency: rec.currency,
+          category: rec.category,
+          cadence: rec.cadence,
+          nextDueDate: rec.nextDueDate,
+          autoRemind: rec.autoRemind,
+          lastPaidDate: rec.lastPaidDate,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      });
+    }
+
+    await commitAndReset();
+    void ops;
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }

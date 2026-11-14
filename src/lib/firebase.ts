@@ -19,23 +19,29 @@ const configModules = import.meta.glob<{ default: FirebaseAppletConfig }>(
 const fileConfig = Object.values(configModules)[0]?.default;
 
 const env = import.meta.env;
+const clean = (val: string | undefined) => (typeof val === 'string' ? val.trim() : '');
+
 const firebaseConfig: FirebaseAppletConfig = {
-  apiKey: env.VITE_FIREBASE_API_KEY || fileConfig?.apiKey || '',
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || fileConfig?.authDomain || '',
-  projectId: env.VITE_FIREBASE_PROJECT_ID || fileConfig?.projectId || '',
-  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || fileConfig?.storageBucket || '',
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || fileConfig?.messagingSenderId || '',
-  appId: env.VITE_FIREBASE_APP_ID || fileConfig?.appId || '',
+  apiKey: clean(env.VITE_FIREBASE_API_KEY) || clean(fileConfig?.apiKey),
+  authDomain: clean(env.VITE_FIREBASE_AUTH_DOMAIN) || clean(fileConfig?.authDomain),
+  projectId: clean(env.VITE_FIREBASE_PROJECT_ID) || clean(fileConfig?.projectId),
+  storageBucket: clean(env.VITE_FIREBASE_STORAGE_BUCKET) || clean(fileConfig?.storageBucket),
+  messagingSenderId:
+    clean(env.VITE_FIREBASE_MESSAGING_SENDER_ID) || clean(fileConfig?.messagingSenderId),
+  appId: clean(env.VITE_FIREBASE_APP_ID) || clean(fileConfig?.appId),
   firestoreDatabaseId:
-    env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || fileConfig?.firestoreDatabaseId || '(default)',
+    clean(env.VITE_FIREBASE_FIRESTORE_DATABASE_ID) ||
+    clean(fileConfig?.firestoreDatabaseId) ||
+    '(default)',
 };
 
-export const isFirebaseConfigured = Boolean(
-  firebaseConfig.apiKey &&
-    firebaseConfig.projectId &&
-    firebaseConfig.authDomain &&
-    firebaseConfig.appId,
-);
+const missingRequiredKeys: string[] = [];
+if (!firebaseConfig.apiKey) missingRequiredKeys.push('VITE_FIREBASE_API_KEY');
+if (!firebaseConfig.authDomain) missingRequiredKeys.push('VITE_FIREBASE_AUTH_DOMAIN');
+if (!firebaseConfig.projectId) missingRequiredKeys.push('VITE_FIREBASE_PROJECT_ID');
+if (!firebaseConfig.appId) missingRequiredKeys.push('VITE_FIREBASE_APP_ID');
+
+export const isFirebaseConfigured = missingRequiredKeys.length === 0;
 
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
@@ -59,8 +65,7 @@ if (isFirebaseConfigured) {
     googleProvider = null;
   }
 } else {
-  firebaseInitError =
-    'Cloud sync is not configured yet (missing VITE_FIREBASE_* GitHub Secrets or firebase-applet-config.json). You can still use the 6-Month Sample Ledger locally.';
+  firebaseInitError = `Cloud sync is not configured yet (missing VITE_FIREBASE_* GitHub Secrets or firebase-applet-config.json: ${missingRequiredKeys.join(', ')}). You can still use the 6-Month Sample Ledger locally.`;
 }
 
 export { app, auth, db, firebaseInitError, googleProvider };

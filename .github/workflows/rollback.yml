@@ -1,0 +1,109 @@
+name: Restore FinTrack Checkpoint
+
+on:
+  workflow_dispatch:
+    inputs:
+      checkpoint_ref:
+        description: "Checkpoint tag or branch to restore (e.g. gh-pages-backup or checkpoint-YYYYMMDD-HHMMSS-sha)"
+        required: true
+        default: "gh-pages-backup"
+        type: string
+      restore_mode:
+        description: "Rollback scope"
+        required: true
+        default: "redeploy-gh-pages-only"
+        type: choice
+        options:
+          - redeploy-gh-pages-only
+          - create-restore-branch-and-redeploy
+
+permissions:
+  contents: write
+
+concurrency:
+  group: "gh-pages-deploy"
+  cancel-in-progress: false
+
+jobs:
+  restore_checkpoint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate checkpoint reference input
+        env:
+          CHECKPOINT_REF: ${{ github.event.inputs.checkpoint_ref }}
+        run: |
+          if ! echo "$CHECKPOINT_REF" | grep -Eq '^[a-zA-Z0-9._/-]{1,120}$'; then
+            echo "::error::Invalid checkpoint reference format."
+            exit 1
+          fi
+
+      - name: Restore pre-built gh-pages-backup directly (if selected)
+        if: ${{ github.event.inputs.checkpoint_ref == 'gh-pages-backup' }}
+        run: |
+          git init restore-repo
+          cd restore-repo
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git fetch origin gh-pages-backup
+          git push origin FETCH_HEAD:refs/heads/gh-pages --force
+          echo "Restored live GitHub Pages site from gh-pages-backup."
+
+      - name: Checkout source at selected checkpoint tag/commit
+        if: ${{ github.event.inputs.checkpoint_ref != 'gh-pages-backup' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.checkpoint_ref }}
+          fetch-depth: 0
+
+      - name: Optionally create restore branch for source recovery
+        if: ${{ github.event.inputs.checkpoint_ref != 'gh-pages-backup' && github.event.inputs.restore_mode == 'create-restore-branch-and-redeploy' }}
+        env:
+          CHECKPOINT_REF: ${{ github.event.inputs.checkpoint_ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          SAFE_SUFFIX=$(echo "$CHECKPOINT_REF" | tr '/' '-')
+          RESTORE_BRANCH="restore/${SAFE_SUFFIX}-$(date -u +%Y%m%d-%H%M%S)"
+          git checkout -b "$RESTORE_BRANCH"
+          git push origin "HEAD:refs/heads/${RESTORE_BRANCH}"
+          echo "Created source recovery branch: ${RESTORE_BRANCH}"
+
+      - name: Setup Node.js
+        if: ${{ github.event.inputs.checkpoint_ref != 'gh-pages-backup' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        if: ${{ github.event.inputs.checkpoint_ref != 'gh-pages-backup' }}
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Verify tests & build at checkpoint
+        if: ${{ github.event.inputs.checkpoint_ref != 'gh-pages-backup' }}
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY || vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN || vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID || vars.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET || vars.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID || vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID || vars.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_FIRESTORE_DATABASE_ID: ${{ secrets.VITE_FIREBASE_FIRESTORE_DATABASE_ID || vars.VITE_FIREBASE_FIRESTORE_DATABASE_ID }}
+        run: |
+          npm run lint
+          npm test
+          npm run build
+          touch dist/.nojekyll
+          cp dist/index.html dist/404.html
+
+      - name: Redeploy checkpoint build to gh-pages
+        if: ${{ github.event.inputs.checkpoint_ref != 'gh-pages-backup' }}
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          keep_files: false

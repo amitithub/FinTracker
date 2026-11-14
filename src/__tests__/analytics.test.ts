@@ -4,6 +4,8 @@ import {
   collectAvailableMonths,
   computeBudgetEvaluations,
   computeCategoryBreakdown,
+  computeDailySpendSeries,
+  computeFilteredLineSeries,
   computeMonthComparison,
   computeMonthlyTotals,
   computeMonthlyTrend,
@@ -156,5 +158,44 @@ describe('analytics and reporting engine', () => {
     expect(sample.recurringBills.length).toBeGreaterThanOrEqual(3);
     const months = collectAvailableMonths(sample.expenses, sample.expenses[0].monthKey);
     expect(months).toHaveLength(6);
+  });
+
+  it('supports custom date ranges, min/max amount filters, sort orders, and line series', () => {
+    const customRes = filterExpenses(SAMPLE_EXPENSES, {
+      range: 'custom',
+      referenceMonthKey: '2026-11',
+      dateFrom: '2026-11-02',
+      dateTo: '2026-11-30',
+      category: 'All',
+      currency: 'All',
+      searchQuery: '',
+      minAmount: 100,
+      maxAmount: 500,
+      sortBy: 'amount-asc',
+    });
+    expect(customRes).toHaveLength(1);
+    expect(customRes[0].id).toBe('e2');
+
+    const sortedHigh = filterExpenses(SAMPLE_EXPENSES, {
+      range: 'all',
+      referenceMonthKey: '2026-11',
+      category: 'All',
+      currency: 'All',
+      searchQuery: '',
+      sortBy: 'amount-desc',
+    });
+    expect(sortedHigh[0].convertedAmount).toBe(1500);
+    expect(sortedHigh[sortedHigh.length - 1].convertedAmount).toBe(200);
+
+    const daily = computeDailySpendSeries(SAMPLE_EXPENSES, '2026-11');
+    expect(daily).toHaveLength(30);
+    expect(daily[0].total).toBe(1500);
+    expect(daily[4].cumulative).toBe(1700);
+    expect(daily[29].cumulative).toBe(1700);
+
+    const monthlySeries = computeFilteredLineSeries(SAMPLE_EXPENSES);
+    expect(monthlySeries.granularity).toBe('monthly');
+    expect(monthlySeries.points).toHaveLength(2);
+    expect(monthlySeries.points[1].cumulative).toBe(3200);
   });
 });
