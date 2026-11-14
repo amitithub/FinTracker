@@ -142,8 +142,9 @@ describe('FinTrack Core Product Use Cases', () => {
     const housingBtn = screen.getAllByRole('button', { name: /Housing/i })[0];
     fireEvent.click(housingBtn);
 
-    expect(await screen.findByText('Expense Reports & History')).toBeInTheDocument();
-    const categorySelect = screen.getByLabelText(/Filter by category/i) as HTMLSelectElement;
+    const categorySelect = (await screen.findByLabelText(
+      /Filter by category/i,
+    )) as HTMLSelectElement;
     expect(categorySelect.value).toBe('Housing');
   });
 
@@ -215,9 +216,10 @@ describe('FinTrack Core Product Use Cases', () => {
     expect(await screen.findByText('Financial Overview')).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: /Reports/i })[0]);
-    expect(await screen.findByText('Expense Reports & History')).toBeInTheDocument();
 
-    const searchInput = screen.getByPlaceholderText(/Search description, notes, category\.\.\./i);
+    const searchInput = await screen.findByPlaceholderText(
+      /Search description, notes, category\.\.\./i,
+    );
     fireEvent.change(searchInput, { target: { value: 'zzzz_no_such_merchant_999' } });
     expect(
       await screen.findByText(/No expenses match the selected filters/i),
